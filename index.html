@@ -2,18 +2,26 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>DND Master Tome</title>
   <meta name="description" content="Isola di Sanguis e Lux — Guida Completa del Dungeon Master">
+  <meta name="theme-color" content="#1c120a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Master Tome">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="img/icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="img/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📜</text></svg>">
 </head>
 <body>
   <header class="topbar">
-    <button class="menu-btn" id="menuBtn" aria-label="Apri menu" aria-expanded="false">☰</button>
+    <button class="menu-btn" id="menuBtn" aria-label="Apri menu" aria-expanded="false" aria-controls="sidebar">☰</button>
     <a class="brand" href="#/home">
       <span class="brand-title">DND Master Tome</span>
       <span class="brand-sub">Isola di Sanguis e Lux</span>
@@ -22,9 +30,10 @@
   </header>
 
   <div class="layout">
-    <nav class="sidebar" id="sidebar">
+    <div class="backdrop" id="backdrop" hidden></div>
+    <nav class="sidebar" id="sidebar" aria-label="Sezioni">
       <div class="search">
-        <input id="search" type="search" placeholder="Cerca nome, luogo, indizio…" autocomplete="off" aria-label="Cerca">
+        <input id="search" type="search" placeholder="Cerca nome, luogo, indizio…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Cerca">
         <div class="search-results" id="searchResults" hidden></div>
       </div>
       <ul class="nav" id="nav">
@@ -38,6 +47,9 @@
         <li class="nav-group">Avventure</li>
         <li><a href="#/quest" data-page="quest">Quest</a></li>
         <li><a href="#/indizi" data-page="indizi">Segreti e Indizi</a></li>
+        <li class="nav-group">Bestiario</li>
+        <li><a href="#/bestiario" data-page="bestiario">Creature</a></li>
+        <li><a href="#/incontri" data-page="incontri">Incontri</a></li>
         <li class="nav-group">Collegamenti di Trama</li>
         <li><a href="#/archi" data-page="archi">Archi Narrativi</a></li>
         <li><a href="#/timeline" data-page="timeline">Timeline</a></li>
@@ -48,7 +60,22 @@
     <main class="content" id="app" tabindex="-1"></main>
   </div>
 
+  <!-- Barra in basso: solo su telefono -->
+  <nav class="tabbar" id="tabbar" aria-label="Scorciatoie">
+    <a href="#/personaggi" data-page="personaggi"><span class="ico">👤</span><span>Personaggi</span></a>
+    <a href="#/luoghi" data-page="luoghi"><span class="ico">🏰</span><span>Luoghi</span></a>
+    <a href="#/quest" data-page="quest"><span class="ico">📜</span><span>Quest</span></a>
+    <a href="#/bestiario" data-page="bestiario"><span class="ico">🐉</span><span>Bestiario</span></a>
+    <button type="button" id="tabMenu"><span class="ico">☰</span><span>Altro</span></button>
+  </nav>
+
   <script src="js/data.js"></script>
+  <script src="js/bestiario.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    }
+  </script>
 </body>
 </html>

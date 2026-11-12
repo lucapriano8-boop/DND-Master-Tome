@@ -47,6 +47,22 @@
 
   const secret = (html, tag = 'span') => `<${tag} class="secret" title="Segreto del DM">${html}</${tag}>`;
 
+  // ---------- Bestiario: utilità ----------
+  const trovaCreatura = (id) => CREATURE.find((c) => c.id === id);
+  const linkCreatura = (c) => `<a href="#/bestiario/${c.id}">${esc(c.nome)}</a>`;
+  const creatureDiLuogo = (id) => CREATURE.filter((c) => c.luoghi.includes(id));
+  const creatureDiQuest = (id) => CREATURE.filter((c) => c.quest.includes(id));
+  const creatureDiPersonaggio = (id) => CREATURE.filter((c) => c.personaggi.includes(id));
+
+  // Trasforma i nomi delle creature in link (es. "2 Mefiti di Cenere")
+  const aliasCreature = CREATURE.flatMap((c) => c.alias.map((a) => [a, c.id]))
+    .sort((a, b) => b[0].length - a[0].length);
+  const reCreature = new RegExp(`\\b(${aliasCreature.map(([a]) => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`, 'g');
+  const linkifyCreature = (s) => linkify(s).replace(reCreature, (m) => {
+    const hit = aliasCreature.find(([a]) => a === m);
+    return hit ? `<a href="#/bestiario/${hit[1]}">${m}</a>` : m;
+  });
+
   const head = (kicker, title) => `
     <div class="page-head">
       ${kicker ? `<div class="kicker">${esc(kicker)}</div>` : ''}
@@ -83,6 +99,8 @@
       <a href="#/archi"><strong>Archi Narrativi</strong><span>${ARCHI.length} archi e come intrecciarli</span></a>
       <a href="#/timeline"><strong>Timeline</strong><span>Eventi settimana per settimana</span></a>
       <a href="#/web"><strong>Web della Trama</strong><span>La mappa di tutti i fili</span></a>
+      <a href="#/bestiario"><strong>Bestiario</strong><span>${CREATURE.length} creature della Setta e dell'isola</span></a>
+      <a href="#/incontri"><strong>Incontri</strong><span>${INCONTRI_PRONTI.righe.length} incontri pronti e 2 tabelle casuali</span></a>
     </div>`;
 
   pagine.storia = () => `
@@ -177,6 +195,7 @@
     return `<div class="related">
       ${listaLink('Luoghi', tuttiLuoghiP.map(linkLuogo))}
       ${listaLink('Quest collegate', quest.map(linkQuest))}
+      ${listaLink('Nel Bestiario', creatureDiPersonaggio(p.id).map(linkCreatura))}
     </div>`;
   }
 
@@ -299,6 +318,7 @@
         ...atti.map((a) => `<a href="#/quest/${a.id}">${esc(a.titolo)}</a>`),
       ])}
       ${listaLink('Indizi trovabili qui', indizi.map((i) => `${linkIndizio(i)}<br><small class="muted">${esc(i.dove)}</small>`))}
+      ${listaLink('Creature', creatureDiLuogo(id).map((c) => `${linkCreatura(c)}<br><small class="muted">GS ${esc(c.indice.gs)} · ${esc(c.indice.tipo)}</small>`))}
     </div>`;
   }
 
@@ -316,6 +336,7 @@
           ${q.luoghi.map((lid) => trovaLuogo(lid)).filter(Boolean).map(linkLuogo).join(' · ')}
           ${q.personaggi.length ? ' — ' + q.personaggi.map(trovaPersonaggio).filter(Boolean).map(linkPersonaggio).join(' · ') : ''}
         </p>
+        ${creatureDiQuest(q.id).length ? `<p class="creature-line">🐉 ${creatureDiQuest(q.id).map(linkCreatura).join(' · ')}</p>` : ''}
       </section>`).join('')}
     <h2>La Maledizione di Cinerebrax — Riepilogo</h2>
     ${MALEDIZIONE.map((a) => `
@@ -323,8 +344,123 @@
         <h3>${esc(a.titolo)}</h3>
         ${a.righe.map((r) => `<p style="margin:0 0 .3em">${esc(r)}</p>`).join('')}
         ${a.nota ? `<p class="note">${esc(a.nota)}</p>` : ''}
+        ${creatureDiQuest(a.id).length ? `<p class="creature-line">🐉 ${creatureDiQuest(a.id).map(linkCreatura).join(' · ')}</p>` : ''}
       </div>`).join('')}`;
   };
+
+  // ---------- Bestiario ----------
+  pagine.bestiario = (id) => {
+    if (id) return paginaCreatura(id);
+    return `
+    ${head('Supplemento', 'Bestiario')}
+    <p class="muted" style="text-align:center;margin-top:-10px">${esc(BESTIARIO_INFO.sottotitolo)} · ${esc(BESTIARIO_INFO.meta)}</p>
+    <details class="box">
+      <summary><b>Come usare questo bestiario</b></summary>
+      ${BESTIARIO_INFO.comeUsare.map((p) => `<p style="margin-top:.6em">${linkify(p)}</p>`).join('')}
+    </details>
+    <p><a class="btn" href="#/incontri">⚔ Incontri pronti e casuali</a></p>
+    ${SEZIONI_BESTIARIO.map((s) => {
+      const lista = CREATURE.filter((c) => c.sezione === s.id);
+      return `
+      <h2>${esc(s.nome)}</h2>
+      <div class="grid">
+        ${lista.map((c) => `
+          <a class="char-card mon ${s.id}" href="#/bestiario/${c.id}">
+            <span class="gs">GS ${esc(c.indice.gs)}</span>
+            <h3>${esc(c.nome)}</h3>
+            <div class="t">${esc(c.indice.tipo)}</div>
+            <div class="mini"><span>🛡 CA ${esc(c.ca.split(' ')[0])}</span><span>❤ PF ${esc(c.pf.split(' ')[0])}</span></div>
+            <div class="t" style="margin-top:6px">📍 ${esc(c.indice.dove)}</div>
+          </a>`).join('')}
+      </div>`;
+    }).join('')}`;
+  };
+
+  function paginaCreatura(id) {
+    const c = trovaCreatura(id);
+    if (!c) return nonTrovato();
+    const sez = SEZIONI_BESTIARIO.find((s) => s.id === c.sezione);
+    const blocco = (titolo, voci) => voci && voci.length ? `
+      <h4 class="sb-title">${esc(titolo)}</h4>
+      ${voci.map(([n, t, lista]) => `
+        <p class="sb-trait"><b><i>${esc(n)}.</i></b> ${linkify(t)}</p>
+        ${lista ? `<ul class="sb-spells">${lista.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}`).join('')}` : '';
+    const luoghi = c.luoghi.map(trovaLuogo).filter(Boolean);
+    const quest = c.quest.map((q) => QUEST.find((x) => x.id === q) || MALEDIZIONE.find((x) => x.id === q)).filter(Boolean);
+    const pers = c.personaggi.map(trovaPersonaggio).filter(Boolean);
+    const incontri = INCONTRI_PRONTI.righe.filter((r) => c.alias.some((a) => r.composizione.includes(a)));
+
+    return `
+    <a class="back" href="#/bestiario">← Tutto il bestiario</a>
+    <article class="statblock-wrap">
+      <div class="statblock">
+        <div class="sb-kicker ${c.sezione}">${esc(sez.etichetta)}</div>
+        <h1 class="sb-name">${esc(c.nome)}</h1>
+        <div class="sb-type">${esc(c.tipo)}</div>
+        <hr class="sb-rule">
+        <p class="sb-line"><b>Classe Armatura</b> ${esc(c.ca)}</p>
+        <p class="sb-line"><b>Punti Ferita</b> ${esc(c.pf)}</p>
+        <p class="sb-line"><b>Velocità</b> ${esc(c.vel)}</p>
+        <hr class="sb-rule">
+        <div class="sb-stats">
+          ${c.stats.map((s, i) => `<div><b>${STAT_LABELS[i]}</b><span>${esc(s)}</span></div>`).join('')}
+        </div>
+        <hr class="sb-rule">
+        ${c.dettagli.map(([k, v]) => `<p class="sb-line"><b>${esc(k)}</b> ${esc(v)}</p>`).join('')}
+        <hr class="sb-rule">
+        ${c.tratti.map(([n, t, lista]) => `
+          <p class="sb-trait"><b><i>${esc(n)}.</i></b> ${linkify(t)}</p>
+          ${lista ? `<ul class="sb-spells">${lista.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}`).join('')}
+        ${blocco('Azioni', c.azioni)}
+        ${blocco('Reazioni', c.reazioni)}
+      </div>
+      <aside class="isola">
+        <h3>Sull'isola</h3>
+        <h4>Dove si incontra</h4><p>${linkify(c.isola.dove)}</p>
+        <h4>Tattiche e comportamento</h4><p>${linkify(c.isola.tattiche)}</p>
+        <h4>Bottino e indizi</h4><p>${linkify(c.isola.bottino)}</p>
+        <h4>Aggancio di trama</h4><p>${linkify(c.isola.aggancio)}</p>
+        <p class="fonte"><b>Fonte:</b> ${linkify(c.fonte)}</p>
+      </aside>
+    </article>
+    <div class="related">
+      ${listaLink('Luoghi', luoghi.map(linkLuogo))}
+      ${listaLink('Quest', quest.map((q) => QUEST.includes(q) ? linkQuest(q) : `<a href="#/quest/${q.id}">${esc(q.titolo)}</a>`))}
+      ${listaLink('Personaggi collegati', pers.map(linkPersonaggio))}
+      ${listaLink('Incontri pronti', incontri.map((r) => `<a href="#/incontri">${esc(r.nome)}</a><br><small class="muted">Liv. ${esc(r.liv)} · ${esc(r.difficolta)}</small>`))}
+    </div>`;
+  }
+
+  pagine.incontri = () => `
+    ${head('Bestiario', 'Incontri')}
+    <h2 style="margin-top:0">Incontri pronti</h2>
+    <p>${esc(INCONTRI_PRONTI.intro)}</p>
+    <div class="enc-table" role="table">
+      <div class="enc-row enc-head" role="row">
+        <span role="columnheader">Incontro</span><span role="columnheader">Liv.</span>
+        <span role="columnheader">Composizione</span><span role="columnheader">PE mod.</span><span role="columnheader">Difficoltà</span>
+      </div>
+      ${INCONTRI_PRONTI.righe.map((r) => `
+        <div class="enc-row diff-${norm(r.difficolta.split(/[ :(]/)[0])}" role="row">
+          <span role="cell" data-l="Incontro"><b>${esc(r.nome)}</b>${r.rif ? `<small>${linkify(r.rif)}</small>` : ''}</span>
+          <span role="cell" data-l="Liv.">${esc(r.liv)}</span>
+          <span role="cell" data-l="Composizione">${linkifyCreature(r.composizione)}</span>
+          <span role="cell" data-l="PE mod.">${esc(r.pe)}</span>
+          <span role="cell" data-l="Difficoltà" class="diff">${esc(r.difficolta)}</span>
+        </div>`).join('')}
+    </div>
+    <h2>Incontri casuali</h2>
+    <p>${esc(INCONTRI_CASUALI.intro)}</p>
+    ${INCONTRI_CASUALI.tabelle.map((t) => `
+      <div class="box roll-table" id="tab-${t.id}">
+        <div class="roll-head">
+          <h3>${esc(t.titolo)}</h3>
+          <button class="btn roll-btn" type="button" data-roll="${t.id}">🎲 Tira d8</button>
+        </div>
+        <ol class="roll-list">
+          ${t.righe.map((r, i) => `<li data-n="${i + 1}"><span class="n">${i + 1}</span><span>${linkifyCreature(r)}</span></li>`).join('')}
+        </ol>
+      </div>`).join('')}`;
 
   // Indizi trovati: salvati nel browser
   const indiziTrovati = () => new Set(store.get('mt-indizi', []));
@@ -432,6 +568,7 @@
         ${nodi}
       </svg>
     </div>
+    <p class="scroll-hint">↔ Scorri di lato per vedere tutta la mappa</p>
     <div class="web-legend">
       <b>LEGENDA</b>
       ${WEB.legenda.map(([t, n]) => `<span><i style="border-color:${lineStyle[t][0]};${lineStyle[t][1] ? 'border-top-style:dashed' : ''}"></i>${esc(n)}</span>`).join('')}
@@ -455,7 +592,7 @@
     const [page = 'home', id] = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
     const fn = pagine[page];
     app.innerHTML = fn ? fn(id) : nonTrovato();
-    document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === page));
+    document.querySelectorAll('#nav a, #tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.page === page));
     document.title = (page === 'home' ? '' : (document.querySelector(`#nav a[data-page="${page}"]`)?.textContent || '') + ' · ') + 'DND Master Tome';
     if (!id || !['quest', 'indizi'].includes(page)) window.scrollTo(0, 0);
     chiudiMenu();
@@ -465,6 +602,16 @@
   app.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     if (chip) { filtroGruppo = chip.dataset.g; render(); return; }
+
+    const roll = e.target.closest('[data-roll]');
+    if (roll) {
+      const box = document.getElementById('tab-' + roll.dataset.roll);
+      const n = 1 + Math.floor(Math.random() * 8);
+      box.querySelectorAll('li').forEach((li) => li.classList.toggle('rolled', li.dataset.n === String(n)));
+      roll.textContent = `🎲 Risultato: ${n} — tira ancora`;
+      box.querySelector(`li[data-n="${n}"]`).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
 
     if (e.target.id === 'resetIndizi') {
       if (confirm('Vuoi togliere la spunta da tutti gli indizi?')) { store.set('mt-indizi', []); render(); }
@@ -494,7 +641,10 @@
   function aggiornaToggle() {
     const hidden = store.get('mt-hide-secrets', false);
     document.body.classList.toggle('hide-secrets', hidden);
-    toggle.textContent = hidden ? '🔒 Segreti nascosti' : '👁 Segreti visibili';
+    toggle.innerHTML = hidden
+      ? '<span class="ico">🔒</span> <span class="lbl">Segreti nascosti</span>'
+      : '<span class="ico">👁</span> <span class="lbl">Segreti visibili</span>';
+    toggle.setAttribute('aria-label', hidden ? 'Segreti nascosti' : 'Segreti visibili');
     toggle.title = hidden ? 'Clicca per mostrare i segreti del DM' : 'Clicca per nascondere i segreti del DM (utile se condividi lo schermo)';
   }
   toggle.addEventListener('click', () => {
@@ -506,11 +656,18 @@
   // Menu mobile
   const menuBtn = document.getElementById('menuBtn');
   const sidebar = document.getElementById('sidebar');
-  function chiudiMenu() { sidebar.classList.remove('open'); menuBtn.setAttribute('aria-expanded', 'false'); }
-  menuBtn.addEventListener('click', () => {
-    const open = sidebar.classList.toggle('open');
+  const backdrop = document.getElementById('backdrop');
+  function impostaMenu(open) {
+    sidebar.classList.toggle('open', open);
+    backdrop.hidden = !open;
+    document.body.classList.toggle('menu-open', open);
     menuBtn.setAttribute('aria-expanded', String(open));
-  });
+  }
+  function chiudiMenu() { impostaMenu(false); }
+  menuBtn.addEventListener('click', () => impostaMenu(!sidebar.classList.contains('open')));
+  document.getElementById('tabMenu').addEventListener('click', () => impostaMenu(!sidebar.classList.contains('open')));
+  backdrop.addEventListener('click', chiudiMenu);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') chiudiMenu(); });
 
   // ---------- Ricerca ----------
   const indice = [
@@ -524,6 +681,9 @@
     ...tuttiIndizi().map((i) => ({ t: i.titolo, s: 'Indizio · ' + i.categoria.titolo.replace(/^\d+\.\s*/, ''), h: `#/indizi/${i.id}`, x: [i.titolo, i.testo, i.dove].join(' ') })),
     ...ARCHI.map((a) => ({ t: a.titolo, s: 'Arco narrativo', h: '#/archi', x: [a.titolo, a.intro, ...a.fasi.flat()].join(' ') })),
     ...STORIA.saggi.map((s) => ({ t: s.nome, s: 'Saggio di Aethelred · ' + s.elemento, h: '#/storia', x: [s.nome, s.elemento, s.testo].join(' ') })),
+    ...CREATURE.map((c) => ({ t: c.nome, s: `Creatura · GS ${c.indice.gs}`, h: `#/bestiario/${c.id}`,
+      x: [c.nome, c.tipo, c.indice.dove, ...c.tratti.map((t) => t[0] + ' ' + t[1]), ...c.azioni.map((a) => a[0]), ...Object.values(c.isola), c.fonte].join(' ') })),
+    ...INCONTRI_PRONTI.righe.map((r) => ({ t: r.nome, s: `Incontro pronto · Liv. ${r.liv}`, h: '#/incontri', x: [r.nome, r.rif, r.composizione].join(' ') })),
   ].map((e) => ({ ...e, nt: norm(e.t), nx: norm(e.x) }));
 
   const searchInput = document.getElementById('search');
