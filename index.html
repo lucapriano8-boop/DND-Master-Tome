@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DND Master Tome</title>
+  <meta name="description" content="Isola di Sanguis e Lux — Guida Completa del Dungeon Master">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📜</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <button class="menu-btn" id="menuBtn" aria-label="Apri menu" aria-expanded="false">☰</button>
+    <a class="brand" href="#/home">
+      <span class="brand-title">DND Master Tome</span>
+      <span class="brand-sub">Isola di Sanguis e Lux</span>
+    </a>
+    <button class="secret-toggle" id="secretToggle" type="button"></button>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="search">
+        <input id="search" type="search" placeholder="Cerca nome, luogo, indizio…" autocomplete="off" aria-label="Cerca">
+        <div class="search-results" id="searchResults" hidden></div>
+      </div>
+      <ul class="nav" id="nav">
+        <li><a href="#/home" data-page="home">Panoramica</a></li>
+        <li class="nav-group">La Storia e il Mondo</li>
+        <li><a href="#/storia" data-page="storia">Storia</a></li>
+        <li><a href="#/fazioni" data-page="fazioni">Fazioni e Casate</a></li>
+        <li class="nav-group">Personaggi e Luoghi</li>
+        <li><a href="#/personaggi" data-page="personaggi">Personaggi</a></li>
+        <li><a href="#/luoghi" data-page="luoghi">Luoghi</a></li>
+        <li class="nav-group">Avventure</li>
+        <li><a href="#/quest" data-page="quest">Quest</a></li>
+        <li><a href="#/indizi" data-page="indizi">Segreti e Indizi</a></li>
+        <li class="nav-group">Collegamenti di Trama</li>
+        <li><a href="#/archi" data-page="archi">Archi Narrativi</a></li>
+        <li><a href="#/timeline" data-page="timeline">Timeline</a></li>
+        <li><a href="#/web" data-page="web">Web della Trama</a></li>
+      </ul>
+    </nav>
+
+    <main class="content" id="app" tabindex="-1"></main>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
