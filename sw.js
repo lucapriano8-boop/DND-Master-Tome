@@ -1,7 +1,7 @@
 // Service worker: fa funzionare il sito anche senza connessione.
 // Strategia "rete prima, poi copia salvata": con internet si vede sempre
 // la versione aggiornata; senza internet si usa l'ultima copia salvata.
-const CACHE = 'master-tome-v2';
+const CACHE = 'master-tome-v3';
 const FILES = [
   './',
   'index.html',

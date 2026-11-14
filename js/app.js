@@ -78,7 +78,16 @@
   // ---------- Pagine ----------
   const pagine = {};
 
-  pagine.home = () => `
+  pagine.home = () => {
+    const d = leggiDiario();
+    const inCorso = tutteLeQuest().filter((q) => d.quest[q.id] === 'corso');
+    const ultima = [...d.sessioni].sort((a, b) => b.n - a.n)[0];
+    return `
+    <a class="box now-card" href="#/diario">
+      <div><span class="kick">Diario della campagna</span>
+        <b>Settimana ${d.settimana}</b> · ${inCorso.length} quest in corso · ${d.sigilli} sigilli cancellati</div>
+      <div class="muted">${ultima ? `Ultima sessione: ${ultima.n}${ultima.titolo ? ` — ${esc(ultima.titolo)}` : ''}` : 'Nessuna sessione registrata'} →</div>
+    </a>
     <section class="cover">
       <h1>${esc(CAMPAGNA.titolo)}</h1>
       <div class="sub">${esc(CAMPAGNA.sottotitolo.toUpperCase())}</div>
@@ -102,6 +111,7 @@
       <a href="#/bestiario"><strong>Bestiario</strong><span>${CREATURE.length} creature della Setta e dell'isola</span></a>
       <a href="#/incontri"><strong>Incontri</strong><span>${INCONTRI_PRONTI.righe.length} incontri pronti e 2 tabelle casuali</span></a>
     </div>`;
+  };
 
   pagine.storia = () => `
     ${head('Parte I', 'La Storia e il Mondo')}
@@ -196,6 +206,11 @@
       ${listaLink('Luoghi', tuttiLuoghiP.map(linkLuogo))}
       ${listaLink('Quest collegate', quest.map(linkQuest))}
       ${listaLink('Nel Bestiario', creatureDiPersonaggio(p.id).map(linkCreatura))}
+      <div class="box rapporto">
+        <h3>Rapporto con i PG</h3>
+        ${editorRapporto(p.id, leggiDiario())}
+        <p class="muted" style="font-size:.85rem;margin:.4em 0 0">Salvato nel <a href="#/diario">Diario</a>.</p>
+      </div>
     </div>`;
   }
 
@@ -324,11 +339,12 @@
 
   pagine.quest = (id) => {
     setTimeout(() => evidenzia(id), 30);
+    const dq = leggiDiario().quest;
     return `
     ${head('Parte IV', 'Quest e Avventure')}
     ${QUEST.map((q) => `
-      <section class="quest" id="q-${q.id}">
-        <h3>${esc(q.id)} — ${esc(q.titolo)}</h3>
+      <section class="quest stato-${dq[q.id] || 'nessuno'}" id="q-${q.id}">
+        <div class="quest-top"><h3>${esc(q.id)} — ${esc(q.titolo)}</h3>${selectStato(q.id, dq[q.id] || '')}</div>
         <div class="info">${esc(q.info)}</div>
         <p>${esc(q.testo)}</p>
         <div class="conn">${linkify(q.connette)}</div>
@@ -340,8 +356,8 @@
       </section>`).join('')}
     <h2>La Maledizione di Cinerebrax — Riepilogo</h2>
     ${MALEDIZIONE.map((a) => `
-      <div class="box atto quest" id="q-${a.id}">
-        <h3>${esc(a.titolo)}</h3>
+      <div class="box atto quest stato-${dq[a.id] || 'nessuno'}" id="q-${a.id}">
+        <div class="quest-top"><h3>${esc(a.titolo)}</h3>${selectStato(a.id, dq[a.id] || '')}</div>
         ${a.righe.map((r) => `<p style="margin:0 0 .3em">${esc(r)}</p>`).join('')}
         ${a.nota ? `<p class="note">${esc(a.nota)}</p>` : ''}
         ${creatureDiQuest(a.id).length ? `<p class="creature-line">🐉 ${creatureDiQuest(a.id).map(linkCreatura).join(' · ')}</p>` : ''}
@@ -502,18 +518,23 @@
         ${a.fasi.map(([k, v]) => `<div class="fase"><b>■ ${esc(k)}:</b>${linkify(v)}</div>`).join('')}
       </section>`).join('')}`;
 
-  pagine.timeline = () => `
+  pagine.timeline = () => {
+    const w = leggiDiario().settimana;
+    const iT = indiceTimeline(w);
+    return `
     ${head('Parte VI', 'Timeline degli Eventi e Pressioni Temporali')}
     <p class="muted" style="color:#2d5a27">${esc(TIMELINE.intro)}</p>
+    <div class="box week-banner">📅 Siete alla <b>settimana ${w}</b>. <a href="#/diario">Cambiala nel Diario →</a></div>
     <div class="timeline">
-      ${TIMELINE.voci.map(([t, d]) => `
-        <div class="tl-item ${/Scadenza/.test(t) ? 'deadline' : ''}">
-          <h3>■ ${esc(t)}</h3>
+      ${TIMELINE.voci.map(([t, d], i) => `
+        <div class="tl-item ${/Scadenza/.test(t) ? 'deadline' : ''} ${i < iT ? 'past' : ''} ${i === iT ? 'now' : ''}">
+          <h3>■ ${esc(t)}${i === iT ? ' <span class="now-tag">ORA</span>' : ''}</h3>
           <p>${linkify(d)}</p>
         </div>`).join('')}
     </div>
     <blockquote class="quote">${esc(TIMELINE.citazione)}</blockquote>
     ${TIMELINE.chiusura.map((c) => `<p>${esc(c)}</p>`).join('')}`;
+  };
 
   pagine.web = () => {
     const colori = {
@@ -575,6 +596,229 @@
     </div>`;
   };
 
+  // =====================================================================
+  // DIARIO DELLA CAMPAGNA — stato della partita, salvato nel browser
+  // =====================================================================
+  const DIARIO_KEY = 'mt-diario';
+  const diarioVuoto = () => ({ settimana: 0, sigilli: 0, rook: 0, quest: {}, obiettivi: {}, png: {}, sessioni: [] });
+  const leggiDiario = () => ({ ...diarioVuoto(), ...store.get(DIARIO_KEY, {}) });
+  const salvaDiario = (d) => store.set(DIARIO_KEY, d);
+  const modificaDiario = (fn) => { const d = leggiDiario(); fn(d); salvaDiario(d); return d; };
+
+  const STATI_QUEST = [['', 'Non iniziata'], ['corso', 'In corso'], ['fatta', 'Completata'], ['fallita', 'Fallita']];
+  const ATTEGGIAMENTI = ['', 'Ostile', 'Diffidente', 'Neutrale', 'Amichevole', 'Alleato'];
+  const OBIETTIVI = [
+    ['lettera', 'Lettera delle trattative Oakhart-Kaelan trovata', '#/quest/4.7'],
+    ['oakhart', 'Oakhart salvato al Duello di Mezza Estate', '#/quest/4.10'],
+    ['ombra-bianca', 'Ombra-Bianca protetta', '#/personaggi/ombra-bianca'],
+    ['corvus', 'Corvus smascherato', '#/personaggi/corvus'],
+    ['silas', 'Silas liberato', '#/personaggi/silas'],
+    ['drago', 'Cinerebrax neutralizzato', '#/personaggi/cinerebrax'],
+    ['rituale', 'Rituale di Corvus fermato', '#/archi'],
+  ];
+  const tutteLeQuest = () => [...QUEST.map((q) => ({ id: q.id, titolo: `${q.id} — ${q.titolo}`, info: q.info })),
+    ...MALEDIZIONE.map((a) => ({ id: a.id, titolo: a.titolo, info: 'La Maledizione di Cinerebrax' }))];
+
+  // La timeline del PDF raggruppa alcune settimane: 4–5, 6+ (fino alla 7), 8
+  const indiceTimeline = (w) => (w <= 3 ? w : w <= 5 ? 4 : w <= 7 ? 5 : 6);
+  const SETTIMANA_MAX = 8;
+
+  const selectStato = (qid, stato) => `
+    <select class="stato-select" data-quest="${esc(qid)}" aria-label="Stato della quest">
+      ${STATI_QUEST.map(([v, n]) => `<option value="${v}" ${stato === v ? 'selected' : ''}>${n}</option>`).join('')}
+    </select>`;
+
+  const editorRapporto = (pid, d) => {
+    const r = d.png[pid] || {};
+    return `
+      <select data-png-att="${esc(pid)}" aria-label="Atteggiamento verso i PG">
+        ${ATTEGGIAMENTI.map((a) => `<option value="${a}" ${r.att === a ? 'selected' : ''}>${a || '— nessuno —'}</option>`).join('')}
+      </select>
+      <textarea data-png-note="${esc(pid)}" rows="2" placeholder="Note: cosa sa, cosa ha promesso, cosa pensa dei PG…">${esc(r.note || '')}</textarea>`;
+  };
+
+  const contatore = (act, valore, max) => `
+    <div class="counter">
+      <button type="button" class="cbtn" data-act="${act}-" aria-label="Diminuisci">−</button>
+      <span class="cval">${valore}${max ? `<small>/${max}</small>` : ''}</span>
+      <button type="button" class="cbtn" data-act="${act}+" aria-label="Aumenta">+</button>
+    </div>`;
+
+  pagine.diario = () => {
+    const d = leggiDiario();
+    const iT = indiceTimeline(d.settimana);
+    const [tOra, dOra] = TIMELINE.voci[iT];
+    const prossima = TIMELINE.voci[iT + 1];
+    const trovati = indiziTrovati();
+    const indiziFrattura = INDIZI[0].voci.filter((v) => trovati.has(v.id)).length;
+    const reqA = [
+      ['La lettera Oakhart-Kaelan', !!d.obiettivi.lettera],
+      [`Almeno 4 indizi sulla vera storia (${indiziFrattura}/8 spuntati)`, indiziFrattura >= 4],
+      ['Silas liberato', !!d.obiettivi.silas],
+    ];
+    const conteggio = (s) => tutteLeQuest().filter((q) => (d.quest[q.id] || '') === s).length;
+    const sessioni = [...d.sessioni].sort((a, b) => b.n - a.n);
+    const pngList = [...PERSONAGGI, ...PNG_MINORI];
+
+    return `
+    ${head('Al tavolo', 'Diario della Campagna')}
+    <p class="muted" style="text-align:center;margin-top:-8px">Tutto quello che segni qui resta salvato in questo dispositivo.
+      Per portarlo su un altro usa <a href="#/diario" data-act="vai-backup">Esporta / Importa</a>.</p>
+
+    <section class="dsec">
+      <h2>Settimana della campagna</h2>
+      <div class="week">
+        ${contatore('sett', d.settimana)}
+        <div class="week-info">
+          <div class="week-label">Settimana ${d.settimana}${d.settimana >= SETTIMANA_MAX ? ' — scadenza' : ''}</div>
+          <div class="muted">${esc(TIMELINE.intro)}</div>
+        </div>
+      </div>
+      <div class="box tl-now">
+        <h3>■ ${esc(tOra)}</h3>
+        <p>${linkify(dOra)}</p>
+      </div>
+      ${prossima ? `<div class="box tl-next"><h3>In arrivo — ${esc(prossima[0])}</h3><p>${linkify(prossima[1])}</p></div>` : ''}
+      <p><a href="#/timeline">Vedi tutta la timeline →</a></p>
+    </section>
+
+    <section class="dsec">
+      <h2>Contatori</h2>
+      <div class="grid">
+        <div class="box">
+          <h3>Sigilli cancellati</h3>
+          ${contatore('sig', d.sigilli)}
+          <p class="note" style="margin-top:.6em">Ogni sigillo cancellato avvicina il rituale di Corvus (Timeline, settimana 6+).</p>
+          <p style="font-size:.92rem">Vedi: <a href="#/bestiario/cancellatore">Cancellatore di Glifi</a> ·
+            <a href="#/bestiario/sentinella">Sentinella di Aethelred</a> · <a href="#/bestiario/bambino">Il Bambino con gli Occhi d'Argento</a></p>
+        </div>
+        <div class="box">
+          <h3>Rook il Cacciatore — interazioni positive</h3>
+          ${contatore('rook', d.rook, 3)}
+          <p class="note" style="margin-top:.6em">Guida essenziale per Monte Cinere. Tre interazioni positive: rivela tutto sul drago.</p>
+          ${d.rook >= 3 ? `<p class="ok">✓ Rook si fida dei PG: <a href="#/indizi/d5">indizio «Rook con la Torcia»</a></p>` : ''}
+        </div>
+        <div class="box">
+          <h3>Indizi trovati</h3>
+          ${INDIZI.map((c) => {
+            const n = c.voci.filter((v) => trovati.has(v.id)).length;
+            return `<div class="mini-prog"><span>${esc(c.titolo.replace(/^\d+\.\s*/, ''))}</span><b>${n}/${c.voci.length}</b></div>`;
+          }).join('')}
+          <p style="font-size:.92rem;margin-top:.5em"><a href="#/indizi">Apri Segreti e Indizi →</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="dsec">
+      <h2>Obiettivi chiave</h2>
+      <div class="grid">
+        <div class="box">
+          ${OBIETTIVI.map(([k, n, h]) => `
+            <label class="check">
+              <input type="checkbox" data-ob="${k}" ${d.obiettivi[k] ? 'checked' : ''}>
+              <span>${esc(n)} <a href="${h}" aria-label="Apri">↗</a></span>
+            </label>`).join('')}
+        </div>
+        <div class="box c-indipendente">
+          <h3>Arco A — La Pace Impossibile</h3>
+          <p class="muted" style="font-size:.95rem">Risoluzione — richiede:</p>
+          ${reqA.map(([n, ok]) => `<p class="req ${ok ? 'ok' : ''}">${ok ? '✓' : '○'} ${esc(n)}</p>`).join('')}
+          ${reqA.every(([, ok]) => ok) ? '<p class="ok"><b>Tutti i requisiti sono soddisfatti.</b></p>' : ''}
+        </div>
+      </div>
+    </section>
+
+    <section class="dsec">
+      <h2>Quest</h2>
+      <p class="muted">${conteggio('corso')} in corso · ${conteggio('fatta')} completate · ${conteggio('fallita')} fallite</p>
+      <div class="qlist">
+        ${tutteLeQuest().map((q) => `
+          <div class="qrow stato-${d.quest[q.id] || 'nessuno'}">
+            <a href="#/quest/${esc(q.id)}">${esc(q.titolo)}<small>${esc(q.info)}</small></a>
+            ${selectStato(q.id, d.quest[q.id] || '')}
+          </div>`).join('')}
+      </div>
+    </section>
+
+    <section class="dsec">
+      <h2>Rapporti con i PNG</h2>
+      <details class="box">
+        <summary><b>Atteggiamento e note per ogni personaggio</b> <span class="muted">(${Object.values(d.png).filter((r) => r.att || r.note).length} compilati)</span></summary>
+        <div class="png-list">
+          ${pngList.map((p) => `
+            <div class="png-row">
+              <div class="png-name">${linkPersonaggio(p)}</div>
+              ${editorRapporto(p.id, d)}
+            </div>`).join('')}
+        </div>
+      </details>
+    </section>
+
+    <section class="dsec">
+      <h2>Sessioni</h2>
+      <button type="button" class="btn" data-act="nuova-sessione">＋ Nuova sessione</button>
+      ${sessioni.length ? sessioni.map((s) => `
+        <div class="box sess" data-sess="${s.id}">
+          <div class="sess-head">
+            <b>Sessione ${s.n}</b>
+            <input type="date" value="${esc(s.data)}" data-sess-field="data" aria-label="Data">
+            <button type="button" class="reset-btn" data-act="del-sessione" data-id="${s.id}">Elimina</button>
+          </div>
+          <input type="text" class="sess-title" value="${esc(s.titolo)}" data-sess-field="titolo" placeholder="Titolo (es. «La notte della cenere»)">
+          <textarea rows="5" data-sess-field="testo" placeholder="Cosa è successo, scelte dei PG, PNG incontrati, cose da ricordare per la prossima volta…">${esc(s.testo)}</textarea>
+        </div>`).join('') : '<p class="muted" style="margin-top:12px">Nessuna sessione ancora. Premi «Nuova sessione» per iniziare.</p>'}
+    </section>
+
+    <section class="dsec" id="backup">
+      <h2>Esporta / Importa</h2>
+      <p>Salva in un file il diario e gli indizi spuntati, per tenerne una copia o aprirli su un altro dispositivo (iPad, iPhone, PC).</p>
+      <div class="btn-row">
+        <button type="button" class="btn" data-act="export">⬇ Esporta file</button>
+        <button type="button" class="btn btn-light" data-act="import">⬆ Importa file</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+        <button type="button" class="reset-btn" data-act="reset-diario">Azzera diario</button>
+      </div>
+    </section>`;
+  };
+
+  // Ridisegna la pagina corrente senza tornare in cima
+  function ridisegna() {
+    const y = window.scrollY;
+    const [page = 'home', id] = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+    if (pagine[page]) app.innerHTML = pagine[page](id);
+    window.scrollTo(0, y);
+  }
+
+  function esporta() {
+    const dati = { app: 'dnd-master-tome', versione: 1, esportato: new Date().toISOString(),
+      diario: leggiDiario(), indizi: [...indiziTrovati()] };
+    const blob = new Blob([JSON.stringify(dati, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `master-tome-diario-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
+  function importa(file) {
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const dati = JSON.parse(r.result);
+        if (dati.app !== 'dnd-master-tome' || !dati.diario) throw new Error('formato');
+        const n = (dati.diario.sessioni || []).length;
+        if (!confirm(`Il file contiene ${n} sessioni ed è stato esportato il ${new Date(dati.esportato).toLocaleString('it-IT')}.\nVuoi sostituire il diario di questo dispositivo?`)) return;
+        salvaDiario({ ...diarioVuoto(), ...dati.diario });
+        store.set('mt-indizi', Array.isArray(dati.indizi) ? dati.indizi : []);
+        ridisegna();
+        alert('Diario importato.');
+      } catch (err) {
+        alert('Questo file non è un diario di DND Master Tome.');
+      }
+    };
+    r.readAsText(file);
+  }
+
   function nonTrovato() {
     return `${head('', 'Pagina non trovata')}<p><a href="#/home">Torna alla panoramica</a></p>`;
   }
@@ -634,6 +878,71 @@
     const hash = location.hash;
     app.innerHTML = pagine.indizi();
     if (location.hash === hash) window.scrollTo(0, y);
+  });
+
+  // ---------- Eventi del diario (valgono in tutte le pagine) ----------
+  app.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const act = b.dataset.act;
+    const passi = { 'sett+': ['settimana', 1, SETTIMANA_MAX], 'sett-': ['settimana', -1, SETTIMANA_MAX],
+      'sig+': ['sigilli', 1, 999], 'sig-': ['sigilli', -1, 999], 'rook+': ['rook', 1, 3], 'rook-': ['rook', -1, 3] };
+    if (passi[act]) {
+      const [k, delta, max] = passi[act];
+      modificaDiario((d) => { d[k] = Math.max(0, Math.min(max, (d[k] || 0) + delta)); });
+      ridisegna();
+    } else if (act === 'nuova-sessione') {
+      modificaDiario((d) => {
+        const n = d.sessioni.reduce((m, s) => Math.max(m, s.n), 0) + 1;
+        d.sessioni.push({ id: Date.now().toString(36), n, data: new Date().toISOString().slice(0, 10), titolo: '', testo: '' });
+      });
+      ridisegna();
+      app.querySelector('.sess .sess-title')?.focus();
+    } else if (act === 'del-sessione') {
+      const d = leggiDiario();
+      const s = d.sessioni.find((x) => x.id === b.dataset.id);
+      if (s && confirm(`Eliminare la sessione ${s.n}${s.titolo ? ` «${s.titolo}»` : ''}? Non si può annullare.`)) {
+        modificaDiario((dd) => { dd.sessioni = dd.sessioni.filter((x) => x.id !== s.id); });
+        ridisegna();
+      }
+    } else if (act === 'export') {
+      esporta();
+    } else if (act === 'import') {
+      document.getElementById('importFile').click();
+    } else if (act === 'reset-diario') {
+      if (confirm('Azzerare tutto il diario (settimana, contatori, quest, rapporti e sessioni)? Gli indizi spuntati restano. Non si può annullare: se vuoi, esporta prima un file.')) {
+        salvaDiario(diarioVuoto()); ridisegna();
+      }
+    } else if (act === 'vai-backup') {
+      e.preventDefault();
+      document.getElementById('backup')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+
+  app.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.dataset.quest !== undefined) {
+      modificaDiario((d) => { if (t.value) d.quest[t.dataset.quest] = t.value; else delete d.quest[t.dataset.quest]; });
+      ridisegna();
+    } else if (t.dataset.ob) {
+      modificaDiario((d) => { d.obiettivi[t.dataset.ob] = t.checked; });
+      ridisegna();
+    } else if (t.dataset.pngAtt !== undefined) {
+      modificaDiario((d) => { d.png[t.dataset.pngAtt] = { ...(d.png[t.dataset.pngAtt] || {}), att: t.value }; });
+    } else if (t.id === 'importFile' && t.files[0]) {
+      importa(t.files[0]); t.value = '';
+    }
+  });
+
+  // Testi: salvati mentre scrivi, senza ridisegnare (il cursore resta dov'è)
+  app.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.dataset.pngNote !== undefined) {
+      modificaDiario((d) => { d.png[t.dataset.pngNote] = { ...(d.png[t.dataset.pngNote] || {}), note: t.value }; });
+    } else if (t.dataset.sessField) {
+      const id = t.closest('[data-sess]').dataset.sess;
+      modificaDiario((d) => { const s = d.sessioni.find((x) => x.id === id); if (s) s[t.dataset.sessField] = t.value; });
+    }
   });
 
   // Mostra/nascondi segreti
